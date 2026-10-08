@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  name         String
+  bank         String
+  balance      Float         @default(0)
+  color        String        @default("#6366f1")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  color        String        @default("#6366f1")
+  icon         String        @default("tag")
+  keywords     String        @default("") // comma-separated
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+model Transaction {
+  id          String    @id @default(cuid())
+  amount      Float
+  type        String    // "IN" | "OUT"
+  description String    @default("")
+  rawText     String    @default("") // teks asli dari SMS/notifikasi
+  accountId   String?
+  categoryId  String?
+  sakuId      String?
+  notes       String    @default("")
+  createdAt   DateTime  @default(now())
+
+  account     Account?  @relation(fields: [accountId], references: [id])
+  category    Category? @relation(fields: [categoryId], references: [id])
+  saku        Saku?     @relation(fields: [sakuId], references: [id])
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  categoryId  String
+  month       String   // format: "2024-10"
+  limitAmount Float
+  spentAmount Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, month])
+}
+
+model Saku {
+  id              String        @id @default(cuid())
+  name            String
+  allocatedAmount Float         @default(0)
+  spentAmount     Float         @default(0)
+  color           String        @default("#6366f1")
+  icon            String        @default("wallet")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  transactions    Transaction[]
+}
+
+model Tabungan {
+  id            String    @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  deadline      DateTime?
+  color         String    @default("#6366f1")
+  icon          String    @default("piggy-bank")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  setoran       Setoran[]
+}
+
+model Setoran {
+  id         String   @id @default(cuid())
+  tabunganId String
+  amount     Float
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+
+  tabungan   Tabungan @relation(fields: [tabunganId], references: [id])
+}
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
