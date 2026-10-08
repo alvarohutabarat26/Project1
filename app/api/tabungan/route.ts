@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const tabungan = await prisma.tabungan.findMany({
     include: { setoran: { orderBy: { createdAt: "desc" }, take: 5 } },

@@ -62,7 +62,7 @@ export default function AnalyticsPage() {
             <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis tickFormatter={formatK} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
-              formatter={(val: number) => formatRupiah(val)}
+              formatter={(val: any) => formatRupiah(Number(val) || 0)}
               contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "12px" }}
               labelStyle={{ color: "#94a3b8" }}
             />
@@ -94,7 +94,7 @@ export default function AnalyticsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(val: number) => formatRupiah(val)}
+                  formatter={(val: any) => formatRupiah(Number(val) || 0)}
                   contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "12px" }}
                 />
               </PieChart>
