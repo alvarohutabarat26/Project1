@@ -9,9 +9,10 @@ const secret = new TextEncoder().encode(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip auth for login page and API webhook
+  // Skip auth for login page and API auth/webhook
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/webhook") ||
     pathname.startsWith("/api/setup")
   ) {
