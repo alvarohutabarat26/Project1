@@ -4,7 +4,10 @@ import { getLast6Months } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const accountId = searchParams.get("accountId");
+
   const months = getLast6Months();
 
   const data = await Promise.all(
@@ -13,9 +16,15 @@ export async function GET() {
       const start = new Date(parseInt(year), parseInt(m) - 1, 1);
       const end = new Date(parseInt(year), parseInt(m), 1);
 
-      const txs = await prisma.transaction.findMany({
-        where: { createdAt: { gte: start, lt: end } },
-      });
+      const where: Record<string, unknown> = {
+        createdAt: { gte: start, lt: end },
+      };
+
+      if (accountId && accountId !== "all") {
+        where.accountId = accountId;
+      }
+
+      const txs = await prisma.transaction.findMany({ where });
 
       const income = txs.filter((t) => t.type === "IN").reduce((s, t) => s + t.amount, 0);
       const expense = txs.filter((t) => t.type === "OUT").reduce((s, t) => s + t.amount, 0);
@@ -29,8 +38,17 @@ export async function GET() {
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+  const outWhere: Record<string, unknown> = {
+    type: "OUT",
+    createdAt: { gte: start, lt: end },
+  };
+
+  if (accountId && accountId !== "all") {
+    outWhere.accountId = accountId;
+  }
+
   const outTxs = await prisma.transaction.findMany({
-    where: { type: "OUT", createdAt: { gte: start, lt: end } },
+    where: outWhere,
     include: { category: true },
   });
 
@@ -43,8 +61,13 @@ export async function GET() {
     categoryMap[key].total += tx.amount;
   }
 
+  const accounts = await prisma.account.findMany({
+    orderBy: { name: "asc" },
+  });
+
   return NextResponse.json({
     monthly: data,
     categoryBreakdown: Object.values(categoryMap),
+    accounts,
   });
 }
