@@ -21,8 +21,24 @@ export const BANK_CONFIGS: Record<string, { color: string; label: string; icon: 
 };
 
 export function detectBank(text: string, appHint?: string): string {
-  // 1. Periksa prefix nama aplikasi di awal teks (misal: "SeaBank: ...", "[SeaBank] ...", dll)
-  const prefixMatch = text.match(/^\[?([a-zA-Z0-9\s]+?)\]?\s*[:\-–]\s*/);
+  const clean = text.trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Cek langsung jika diawali nama bank/e-wallet (baik dengan spasi/titik dua maupun menempel seperti "DANARp...", "SeaBankKamu...")
+  if (/^seabank/i.test(clean)) return "SeaBank";
+  if (/^dana/i.test(clean)) return "DANA";
+  if (/^(?:gopay|gojek)/i.test(clean)) return "GoPay";
+  if (/^(?:shopeepay|shopee|spay)/i.test(clean)) return "ShopeePay";
+  if (/^(?:wondr|bni)/i.test(clean)) return "wondr by BNI";
+  if (/^(?:jago|bank\s*jago)/i.test(clean)) return "Bank Jago";
+  if (/^(?:bale|btn)/i.test(clean)) return "bale by BTN";
+  if (/^ovo/i.test(clean)) return "OVO";
+  if (/^bca/i.test(clean)) return "BCA";
+  if (/^(?:mandiri|livin)/i.test(clean)) return "Mandiri";
+  if (/^(?:bri|brimo)/i.test(clean)) return "BRI";
+
+  // 2. Cek appHint atau prefix dengan kurung/titik dua: "[SeaBank] ...", "DANA: ...", dll
+  const prefixMatch = clean.match(/^\[?([a-zA-Z0-9\s]+?)\]?\s*[:\-–]\s*/);
   const prefix = (prefixMatch ? prefixMatch[1] : (appHint || "")).toLowerCase().trim();
 
   if (prefix) {
@@ -39,9 +55,9 @@ export function detectBank(text: string, appHint?: string): string {
     if (prefix.includes("bri") || prefix.includes("brimo")) return "BRI";
   }
 
-  const combined = `${appHint || ""} ${text}`.toLowerCase();
+  const combined = `${appHint || ""} ${clean}`.toLowerCase();
 
-  // 2. Cek keyword unik per bank
+  // 3. Cek keyword spesifik di dalam isi teks
   if (combined.includes("wondr") || combined.includes("bni") || combined.includes("1500 130") || combined.includes("1500130")) return "wondr by BNI";
   if (combined.includes("seabank") || combined.includes("sea bank") || combined.includes("pt bank seabank")) return "SeaBank";
   if (combined.includes("shopeepay") || combined.includes("spay")) return "ShopeePay";
@@ -53,7 +69,7 @@ export function detectBank(text: string, appHint?: string): string {
   if (combined.includes("mandiri") || combined.includes("livin")) return "Mandiri";
   if (combined.includes("bri") || combined.includes("brimo")) return "BRI";
 
-  // 3. Untuk e-wallet DANA: pastikan bukan kata umum bahasa Indonesia ("menerima dana", "sumber dana", dll)
+  // 4. Untuk e-wallet DANA: pastikan bukan kata umum bahasa Indonesia ("menerima dana", "sumber dana", dll)
   const isDanaWallet =
     /\b(saldo\s+dana|akun\s+dana|dana\s+id|aplikasi\s+dana|dana\s+kaget|dana\s+protection|kirim\s+dana\s+ke)\b/i.test(combined) ||
     (/\bdana\b/i.test(combined) &&
@@ -134,10 +150,18 @@ export function parseSmsBank(text: string, appHint?: string): ParsedTransaction 
     else type = lower.includes("dari") ? "IN" : "OUT";
   }
 
+  // Rapikan deskripsi jika ada nama bank/e-wallet menempel di awal
+  let cleanDesc = text.trim();
+  const bankPrefixRegex = new RegExp(`^${bank}\\s*[:\\-–]?\\s*`, "i");
+  if (bankPrefixRegex.test(cleanDesc)) {
+    const rest = cleanDesc.replace(bankPrefixRegex, "").trim();
+    cleanDesc = `${bank}: ${rest}`;
+  }
+
   return {
     type,
     amount: detectedAmount,
-    description: text.slice(0, 150),
+    description: cleanDesc.slice(0, 150),
     bank,
   };
 }

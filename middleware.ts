@@ -15,6 +15,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/webhook") ||
     pathname.startsWith("/api/reset-data") ||
+    pathname.startsWith("/api/resync") ||
     pathname.startsWith("/api/setup")
   ) {
     return NextResponse.next();
