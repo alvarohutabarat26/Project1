@@ -22,28 +22,23 @@ export async function POST(req: NextRequest) {
 
   try {
     let rawText = "";
-    const contentType = req.headers.get("content-type") || "";
-
-    if (contentType.includes("application/json")) {
-      try {
-        const body = await req.json();
-        rawText = body.text || body.message || body.sms || body.notif || "";
-        if (!rawText && typeof body === "string") rawText = body;
-      } catch {
-        rawText = await req.text();
-      }
-    } else {
+    try {
       rawText = await req.text();
+    } catch {
+      rawText = "";
     }
 
-    // Bersihkan jika terbungkus kutip JSON
-    rawText = rawText.trim();
-    if (rawText.startsWith('{"text":"') && rawText.endsWith('"}')) {
+    rawText = (rawText || "").trim();
+
+    // Jika formatnya JSON, ekstrak field text
+    if (rawText.startsWith("{") && rawText.endsWith("}")) {
       try {
-        const parsedJson = JSON.parse(rawText);
-        rawText = parsedJson.text || rawText;
+        const body = JSON.parse(rawText);
+        if (typeof body === "object" && body !== null) {
+          rawText = body.text || body.message || body.sms || body.notif || rawText;
+        }
       } catch {
-        // Abaikan
+        // Gunakan rawText langsung
       }
     }
 
