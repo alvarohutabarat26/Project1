@@ -57,6 +57,18 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetPin = async () => {
+    if (!confirm("Reset PIN dan buat PIN baru?")) return;
+    setLoading(true);
+    await fetch("/api/auth/login", { method: "PUT" });
+    setPin(["", "", "", "", "", ""]);
+    setError("");
+    setIsFirst(true);
+    setLoading(false);
+    alert("PIN berhasil di-reset. Silakan masukkan 6 digit PIN baru!");
+    inputs.current[0]?.focus();
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 px-6">
       <div className="w-full max-w-sm">
@@ -91,7 +103,16 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <p className="text-red-400 text-center text-sm mb-4 animate-pulse">{error}</p>
+          <div className="text-center mb-4 space-y-2">
+            <p className="text-red-400 text-sm animate-pulse">{error}</p>
+            <button
+              type="button"
+              onClick={handleResetPin}
+              className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+            >
+              Lupa PIN? Klik untuk reset PIN baru
+            </button>
+          </div>
         )}
 
         {loading && (

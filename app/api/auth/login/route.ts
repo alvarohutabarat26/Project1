@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
+// PUT /api/auth/login (reset PIN)
+export async function PUT() {
+  await prisma.settings.deleteMany({ where: { key: "pin_hash" } });
+  return NextResponse.json({ success: true });
+}
+
 // DELETE /api/auth/login (logout)
 export async function DELETE() {
   await deleteSession();
