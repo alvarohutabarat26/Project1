@@ -2,24 +2,56 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseSmsBank, autoCategory } from "@/lib/parser";
 
-export async function POST(req: NextRequest) {
-  // Validasi webhook secret
-  const authHeader = req.headers.get("authorization");
-  const secret = process.env.WEBHOOK_SECRET;
+export const dynamic = "force-dynamic";
 
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+export async function POST(req: NextRequest) {
+  // Validasi webhook secret (bisa lewat Header Authorization ATAU Query Param ?token=)
+  const authHeader = req.headers.get("authorization") || "";
+  const queryToken = req.nextUrl.searchParams.get("token") || "";
+  const secret = process.env.WEBHOOK_SECRET || "finansialku-secret-12345";
+
+  const isAuthorized =
+    authHeader === `Bearer ${secret}` ||
+    authHeader === secret ||
+    queryToken === secret ||
+    authHeader.toLowerCase().includes(secret.toLowerCase());
+
+  if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const body = await req.json();
-    const rawText: string = body.text || body.message || body.sms || "";
+    let rawText = "";
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        const body = await req.json();
+        rawText = body.text || body.message || body.sms || body.notif || "";
+        if (!rawText && typeof body === "string") rawText = body;
+      } catch {
+        rawText = await req.text();
+      }
+    } else {
+      rawText = await req.text();
+    }
+
+    // Bersihkan jika terbungkus kutip JSON
+    rawText = rawText.trim();
+    if (rawText.startsWith('{"text":"') && rawText.endsWith('"}')) {
+      try {
+        const parsedJson = JSON.parse(rawText);
+        rawText = parsedJson.text || rawText;
+      } catch {
+        // Abaikan
+      }
+    }
 
     if (!rawText) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    // Parse teks SMS
+    // Parse teks notifikasi / SMS
     const parsed = parseSmsBank(rawText);
     if (!parsed || parsed.amount <= 0) {
       return NextResponse.json(
