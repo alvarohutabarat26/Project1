@@ -58,8 +58,8 @@ export function detectBank(text: string, appHint?: string): string {
   const combined = `${appHint || ""} ${clean}`.toLowerCase();
 
   // 3. Cek keyword spesifik di dalam isi teks
-  if (combined.includes("wondr") || combined.includes("bni") || combined.includes("1500 130") || combined.includes("1500130")) return "wondr by BNI";
-  if (combined.includes("seabank") || combined.includes("sea bank") || combined.includes("pt bank seabank")) return "SeaBank";
+  if (combined.includes("wondr") || combined.includes("bni") || combined.includes("1500046")) return "wondr by BNI";
+  if (combined.includes("seabank") || combined.includes("sea bank") || combined.includes("pt bank seabank") || combined.includes("1500 130") || combined.includes("1500130")) return "SeaBank";
   if (combined.includes("shopeepay") || combined.includes("spay")) return "ShopeePay";
   if (combined.includes("gopay") || combined.includes("gojek")) return "GoPay";
   if (combined.includes("bank jago") || combined.includes("pt bank jago") || /\bjago\b/.test(combined)) return "Bank Jago";
