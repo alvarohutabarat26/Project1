@@ -38,12 +38,27 @@ interface DashboardData {
 export default function DashboardClient() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/dashboard");
+      const d = await res.json();
+      setData(d);
+    } catch {
+      // ignore
+    } finally {
+      setIsRefreshing(false);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
+    refreshData();
+    // Auto-refresh setiap 4 detik agar transaksi masuk real-time
+    const interval = setInterval(refreshData, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -59,9 +74,19 @@ export default function DashboardClient() {
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Beranda</h1>
-        <p className="text-slate-400 text-sm">Ringkasan keuangan & e-wallet kamu</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Beranda</h1>
+          <p className="text-slate-400 text-sm">Ringkasan keuangan & e-wallet kamu</p>
+        </div>
+        <button
+          onClick={refreshData}
+          disabled={isRefreshing}
+          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all text-xs flex items-center gap-1.5"
+          title="Muat Ulang"
+        >
+          <span className={isRefreshing ? "animate-spin" : ""}>🔄</span> Refresh
+        </button>
       </div>
 
       {/* Total Balance Card */}
