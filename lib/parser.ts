@@ -122,11 +122,11 @@ export function parseSmsBank(text: string, appHint?: string): ParsedTransaction 
   // 2. Tentukan apakah uang masuk (IN) atau uang keluar (OUT)
   // Indikator pasti uang keluar:
   const isDefiniteExpense =
-    /(?:melakukan\s+top\s*up|top\s*up.*ke\b|transfer.*ke\b|kirim.*ke\b|dikirim.*ke\b|berhasil\s+transfer|transfer\s+berhasil|bayar|pembayaran|qris|tarik|penarikan|pembelian|debit|debet|\bdb\b)/i.test(lower);
+    /(?:telah\s+melakukan\s+transfer|melakukan\s+transfer|transfer\s+virtual\s+account|melakukan\s+top\s*up|top\s*up.*ke\b|transfer.*(?:ke|kepada)\b|kirim.*ke\b|dikirim.*ke\b|berhasil\s+transfer|transfer\s+berhasil|bayar|pembayaran|qris|tarik|penarikan|pembelian|debit|debet|\bdb\b)/i.test(lower);
 
   // Indikator pasti uang masuk:
   const isDefiniteIncome =
-    /(?:menerima\s+dana|kamu\s+menerima|diterima\s+dari|uang\s+masuk|dana\s+masuk|saldo\s+masuk|transfer\s+masuk|top\s*up\s+saldo.*dari|berhasil\s+top\s*up.*dari|top\s*up\s+berhasil|kredit|\bcr\b|cashback|pengembalian\s+dana|refund)/i.test(lower);
+    /(?:pengisian\s+saldo|ditambahkan\s+ke|menerima\s+dana|kamu\s+menerima|menerima|diterima\s+dari|diterima|uang\s+masuk|dana\s+masuk|saldo\s+masuk|transfer\s+masuk|top\s*up\s+saldo.*dari|berhasil\s+top\s*up|top\s*up\s+berhasil|top\s*up\s+saldo|kredit|\bcr\b|cashback|pengembalian\s+dana|refund)/i.test(lower);
 
   let type: "IN" | "OUT" = "OUT";
 
@@ -135,8 +135,8 @@ export function parseSmsBank(text: string, appHint?: string): ParsedTransaction 
   } else if (isDefiniteExpense && !isDefiniteIncome) {
     type = "OUT";
   } else if (isDefiniteIncome && isDefiniteExpense) {
-    // Jika ada dua-duanya: periksa apakah teks berorientasi menerima
-    if (/menerima|diterima\s+dari|uang\s+masuk/i.test(lower)) {
+    // Jika ada dua-duanya: periksa apakah teks berorientasi menerima/menambah
+    if (/menerima|ditambahkan|pengisian|masuk/i.test(lower)) {
       type = "IN";
     } else {
       type = "OUT";
