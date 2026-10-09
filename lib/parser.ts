@@ -1,94 +1,85 @@
-// Parser untuk SMS notifikasi bank Indonesia
+// Parser untuk SMS dan Notifikasi Bank / E-Wallet Indonesia
 export interface ParsedTransaction {
   type: "IN" | "OUT";
   amount: number;
   description: string;
-  bank?: string;
+  bank: string;
+}
+
+export const BANK_CONFIGS: Record<string, { color: string; label: string; icon: string; short: string }> = {
+  "wondr by BNI": { color: "#f97316", label: "wondr by BNI", icon: "🟠", short: "BNI" },
+  "DANA": { color: "#0284c7", label: "DANA", icon: "💙", short: "DANA" },
+  "GoPay": { color: "#00aec6", label: "GoPay", icon: "🟢", short: "GoPay" },
+  "SeaBank": { color: "#ea580c", label: "SeaBank", icon: "🟠", short: "SeaBank" },
+  "Bank Jago": { color: "#f59e0b", label: "Bank Jago", icon: "💛", short: "Jago" },
+  "ShopeePay": { color: "#ee4d2d", label: "ShopeePay", icon: "🛍️", short: "SPay" },
+  "bale by BTN": { color: "#2563eb", label: "bale by BTN", icon: "🏢", short: "BTN" },
+  "OVO": { color: "#7c3aed", label: "OVO", icon: "💜", short: "OVO" },
+  "BCA": { color: "#00529c", label: "BCA", icon: "💳", short: "BCA" },
+  "Mandiri": { color: "#0369a1", label: "Mandiri", icon: "🏦", short: "Mandiri" },
+  "BRI": { color: "#1d4ed8", label: "BRI", icon: "🏦", short: "BRI" },
+};
+
+export function detectBank(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.includes("wondr") || lower.includes("bni")) return "wondr by BNI";
+  if (lower.includes("dana")) return "DANA";
+  if (lower.includes("gopay") || lower.includes("gojek")) return "GoPay";
+  if (lower.includes("seabank") || lower.includes("sea bank")) return "SeaBank";
+  if (lower.includes("jago") || lower.includes("bank jago")) return "Bank Jago";
+  if (lower.includes("shopeepay") || lower.includes("shopee") || lower.includes("spay")) return "ShopeePay";
+  if (lower.includes("bale") || lower.includes("btn")) return "bale by BTN";
+  if (lower.includes("ovo")) return "OVO";
+  if (lower.includes("bca")) return "BCA";
+  if (lower.includes("mandiri") || lower.includes("livin")) return "Mandiri";
+  if (lower.includes("bri") || lower.includes("brimo")) return "BRI";
+  return "wondr by BNI"; // Default fallback
 }
 
 export function parseSmsBank(text: string): ParsedTransaction | null {
-  const normalized = text.toLowerCase();
-
-  // Patterns untuk berbagai bank Indonesia
-  const patterns = [
-    // BNI
-    {
-      bank: "BNI",
-      inPattern: /(?:trfmasuk|transfer masuk|dana masuk|kredit)[^\d]*rp\.?\s*([\d.,]+)/i,
-      outPattern: /(?:trfkeluar|transfer keluar|debit|pembayaran)[^\d]*rp\.?\s*([\d.,]+)/i,
-    },
-    // BCA
-    {
-      bank: "BCA",
-      inPattern: /(?:cr|kredit|masuk)[^\d]*rp\.?\s*([\d.,]+)/i,
-      outPattern: /(?:db|debit|keluar|transfer ke)[^\d]*rp\.?\s*([\d.,]+)/i,
-    },
-    // Mandiri
-    {
-      bank: "Mandiri",
-      inPattern: /(?:masuk|kredit|cr)[^\d]*rp\.?\s*([\d.,]+)/i,
-      outPattern: /(?:keluar|debit|db|transfer)[^\d]*rp\.?\s*([\d.,]+)/i,
-    },
-    // BRI
-    {
-      bank: "BRI",
-      inPattern: /(?:terima|masuk|kredit)[^\d]*rp\.?\s*([\d.,]+)/i,
-      outPattern: /(?:kirim|keluar|debit|bayar)[^\d]*rp\.?\s*([\d.,]+)/i,
-    },
-    // GoPay / OVO / Dana / ShopeePay
-    {
-      bank: "E-Wallet",
-      inPattern: /(?:top.?up|terima|masuk|diterima)[^\d]*rp\.?\s*([\d.,]+)/i,
-      outPattern: /(?:bayar|kirim|transfer|keluar)[^\d]*rp\.?\s*([\d.,]+)/i,
-    },
-  ];
-
-  // Generic pattern sebagai fallback
-  const genericIn = /(?:masuk|kredit|cr|diterima|terima|top.?up)[^\d]*rp\.?\s*([\d.,]+)/i;
-  const genericOut = /(?:keluar|debit|db|bayar|transfer|kirim)[^\d]*rp\.?\s*([\d.,]+)/i;
-  const amountOnly = /rp\.?\s*([\d.,]+)/i;
+  const bank = detectBank(text);
 
   function parseAmount(str: string): number {
     return parseFloat(str.replace(/\./g, "").replace(",", ".")) || 0;
   }
 
-  // Coba tiap pattern bank
-  for (const { bank, inPattern, outPattern } of patterns) {
-    const inMatch = text.match(inPattern);
-    const outMatch = text.match(outPattern);
+  // Regex deteksi tipe & amount
+  const inRegex = /(?:trfmasuk|transfer masuk|dana masuk|kredit|cr|top.?up|diterima|terima|masuk|uang masuk)[^\d]*rp\.?\s*([\d.,]+)/i;
+  const outRegex = /(?:trfkeluar|transfer keluar|debit|db|bayar|pembayaran|qris|kirim|keluar|uang keluar)[^\d]*rp\.?\s*([\d.,]+)/i;
+  const genericAmount = /rp\.?\s*([\d.,]+)/i;
 
-    if (inMatch) {
-      return {
-        type: "IN",
-        amount: parseAmount(inMatch[1]),
-        description: text.slice(0, 100),
-        bank,
-      };
-    }
-    if (outMatch) {
-      return {
-        type: "OUT",
-        amount: parseAmount(outMatch[1]),
-        description: text.slice(0, 100),
-        bank,
-      };
-    }
-  }
-
-  // Generic fallback
-  const inMatch = text.match(genericIn);
-  const outMatch = text.match(genericOut);
-  const amountMatch = text.match(amountOnly);
+  const inMatch = text.match(inRegex);
+  const outMatch = text.match(outRegex);
+  const amtMatch = text.match(genericAmount);
 
   if (inMatch) {
-    return { type: "IN", amount: parseAmount(inMatch[1]), description: text.slice(0, 100) };
+    return {
+      type: "IN",
+      amount: parseAmount(inMatch[1]),
+      description: text.slice(0, 120),
+      bank,
+    };
   }
+
   if (outMatch) {
-    return { type: "OUT", amount: parseAmount(outMatch[1]), description: text.slice(0, 100) };
+    return {
+      type: "OUT",
+      amount: parseAmount(outMatch[1]),
+      description: text.slice(0, 120),
+      bank,
+    };
   }
-  if (amountMatch) {
-    // Kalau ada amount tapi tidak jelas IN/OUT, asumsikan OUT
-    return { type: "OUT", amount: parseAmount(amountMatch[1]), description: text.slice(0, 100) };
+
+  if (amtMatch) {
+    // Cek ada kata penerima / pengirim
+    const lower = text.toLowerCase();
+    const isIncome = lower.includes("dari") || lower.includes("diterima") || lower.includes("masuk");
+    return {
+      type: isIncome ? "IN" : "OUT",
+      amount: parseAmount(amtMatch[1]),
+      description: text.slice(0, 120),
+      bank,
+    };
   }
 
   return null;

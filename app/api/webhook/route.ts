@@ -32,8 +32,26 @@ export async function POST(req: NextRequest) {
     const categories = await prisma.category.findMany();
     const categoryId = autoCategory(parsed.description, categories);
 
-    // Ambil akun pertama (default)
-    const defaultAccount = await prisma.account.findFirst();
+    // Temukan atau buat akun rekening/e-wallet untuk bank ini
+    let targetAccount = await prisma.account.findFirst({
+      where: {
+        OR: [
+          { bank: { equals: parsed.bank } },
+          { name: { equals: parsed.bank } },
+        ],
+      },
+    });
+
+    if (!targetAccount) {
+      targetAccount = await prisma.account.create({
+        data: {
+          name: parsed.bank,
+          bank: parsed.bank,
+          balance: 0,
+          color: "#6366f1",
+        },
+      });
+    }
 
     // Buat transaksi
     const transaction = await prisma.transaction.create({
@@ -43,18 +61,16 @@ export async function POST(req: NextRequest) {
         description: parsed.description,
         rawText,
         categoryId,
-        accountId: defaultAccount?.id || null,
+        accountId: targetAccount.id,
       },
     });
 
     // Update saldo akun
-    if (defaultAccount) {
-      const delta = parsed.type === "IN" ? parsed.amount : -parsed.amount;
-      await prisma.account.update({
-        where: { id: defaultAccount.id },
-        data: { balance: { increment: delta } },
-      });
-    }
+    const delta = parsed.type === "IN" ? parsed.amount : -parsed.amount;
+    await prisma.account.update({
+      where: { id: targetAccount.id },
+      data: { balance: { increment: delta } },
+    });
 
     // Update budget jika ada kategori & transaksi keluar
     if (categoryId && parsed.type === "OUT") {
