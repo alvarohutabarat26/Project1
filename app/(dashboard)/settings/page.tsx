@@ -112,10 +112,14 @@ export default function SettingsPage() {
         </p>
         <div className="flex gap-2">
           <div className="flex-1 bg-slate-800 rounded-xl px-4 py-2.5 text-slate-300 text-sm font-mono truncate">
-            {webhookUrl || "Loading..."}
+            {webhookUrl ? `${webhookUrl}?token=finansialku-secret-12345` : "Loading..."}
           </div>
           <button
-            onClick={copyWebhook}
+            onClick={() => {
+              navigator.clipboard.writeText(`${webhookUrl}?token=finansialku-secret-12345`);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm transition-colors"
           >
             {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -123,14 +127,19 @@ export default function SettingsPage() {
           </button>
         </div>
         <div className="mt-4 bg-slate-800/50 rounded-xl p-4">
-          <p className="text-xs text-slate-400 font-semibold mb-2">Cara setup di MacroDroid:</p>
-          <ol className="text-xs text-slate-500 space-y-1 list-decimal list-inside">
-            <li>Buka MacroDroid → Buat Macro baru</li>
-            <li>Trigger: "SMS Received" atau "Notification Received"</li>
-            <li>Action: "HTTP Request" → Method: POST</li>
-            <li>URL: isi dengan Webhook URL di atas</li>
-            <li>Header: <code className="bg-slate-700 px-1 rounded">Authorization: Bearer [WEBHOOK_SECRET]</code></li>
-            <li>Body JSON: <code className="bg-slate-700 px-1 rounded">{`{"text": "[sms_body]"}`}</code></li>
+          <p className="text-xs text-slate-400 font-semibold mb-2">Panduan Pengaturan MacroDroid:</p>
+          <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside">
+            <li><strong className="text-slate-200">Trigger:</strong> Notifikasi Diterima (Pilih aplikasi bank/e-wallet Anda).</li>
+            <li><strong className="text-slate-200">Tindakan:</strong> Permintaan HTTP → Metode <strong className="text-indigo-400">POST</strong>.</li>
+            <li><strong className="text-slate-200">URL:</strong> Tempelkan URL lengkap di atas (sudah termasuk token).</li>
+            <li><strong className="text-slate-200">Tipe Konten:</strong> <code className="bg-slate-700 px-1 py-0.5 rounded text-amber-300">text/plain</code></li>
+            <li>
+              <strong className="text-slate-200">Badan Konten:</strong> Gunakan tombol <code className="bg-slate-700 px-1 py-0.5 rounded text-emerald-300">...</code> (Magic Text):
+              <div className="mt-1 font-mono text-xs bg-slate-950 p-2 rounded text-emerald-400 border border-slate-700">
+                [notif_app_name]: [notif_message]
+              </div>
+              <span className="text-[11px] text-slate-400">Pemberian nama aplikasi memastikan sistem membedakan pengirim dan penerima secara tepat.</span>
+            </li>
           </ol>
         </div>
       </div>

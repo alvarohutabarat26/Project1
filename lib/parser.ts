@@ -20,26 +20,58 @@ export const BANK_CONFIGS: Record<string, { color: string; label: string; icon: 
   "BRI": { color: "#1d4ed8", label: "BRI", icon: "🏦", short: "BRI" },
 };
 
-export function detectBank(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes("wondr") || lower.includes("bni")) return "wondr by BNI";
-  if (lower.includes("seabank") || lower.includes("sea bank") || lower.includes("shopee bank")) return "SeaBank";
-  if (lower.includes("dana")) return "DANA";
-  if (lower.includes("gopay") || lower.includes("gojek")) return "GoPay";
-  if (lower.includes("jago") || lower.includes("bank jago")) return "Bank Jago";
-  if (lower.includes("shopeepay") || lower.includes("shopee") || lower.includes("spay")) return "ShopeePay";
-  if (lower.includes("bale") || lower.includes("btn")) return "bale by BTN";
-  if (lower.includes("ovo")) return "OVO";
-  if (lower.includes("bca")) return "BCA";
-  if (lower.includes("mandiri") || lower.includes("livin")) return "Mandiri";
-  if (lower.includes("bri") || lower.includes("brimo")) return "BRI";
+export function detectBank(text: string, appHint?: string): string {
+  // 1. Periksa prefix nama aplikasi di awal teks (misal: "SeaBank: ...", "[SeaBank] ...", dll)
+  const prefixMatch = text.match(/^\[?([a-zA-Z0-9\s]+?)\]?\s*[:\-–]\s*/);
+  const prefix = (prefixMatch ? prefixMatch[1] : (appHint || "")).toLowerCase().trim();
+
+  if (prefix) {
+    if (prefix.includes("seabank") || prefix.includes("sea bank")) return "SeaBank";
+    if (prefix.includes("wondr") || prefix.includes("bni")) return "wondr by BNI";
+    if (prefix.includes("dana")) return "DANA";
+    if (prefix.includes("gopay") || prefix.includes("gojek")) return "GoPay";
+    if (prefix.includes("shopeepay") || prefix.includes("shopee") || prefix.includes("spay")) return "ShopeePay";
+    if (prefix.includes("jago")) return "Bank Jago";
+    if (prefix.includes("bale") || prefix.includes("btn")) return "bale by BTN";
+    if (prefix.includes("ovo")) return "OVO";
+    if (prefix.includes("bca")) return "BCA";
+    if (prefix.includes("mandiri") || prefix.includes("livin")) return "Mandiri";
+    if (prefix.includes("bri") || prefix.includes("brimo")) return "BRI";
+  }
+
+  const combined = `${appHint || ""} ${text}`.toLowerCase();
+
+  // 2. Cek keyword unik per bank
+  if (combined.includes("wondr") || combined.includes("bni") || combined.includes("1500 130") || combined.includes("1500130")) return "wondr by BNI";
+  if (combined.includes("seabank") || combined.includes("sea bank") || combined.includes("pt bank seabank")) return "SeaBank";
+  if (combined.includes("shopeepay") || combined.includes("spay")) return "ShopeePay";
+  if (combined.includes("gopay") || combined.includes("gojek")) return "GoPay";
+  if (combined.includes("bank jago") || combined.includes("pt bank jago") || /\bjago\b/.test(combined)) return "Bank Jago";
+  if (combined.includes("bale") || combined.includes("btn") || combined.includes("bank btn")) return "bale by BTN";
+  if (combined.includes("ovo") || combined.includes("ovo cash")) return "OVO";
+  if (combined.includes("bca") || combined.includes("mybca") || combined.includes("bca mobile")) return "BCA";
+  if (combined.includes("mandiri") || combined.includes("livin")) return "Mandiri";
+  if (combined.includes("bri") || combined.includes("brimo")) return "BRI";
+
+  // 3. Untuk e-wallet DANA: pastikan bukan kata umum bahasa Indonesia ("menerima dana", "sumber dana", dll)
+  const isDanaWallet =
+    /\b(saldo\s+dana|akun\s+dana|dana\s+id|aplikasi\s+dana|dana\s+kaget|dana\s+protection|kirim\s+dana\s+ke)\b/i.test(combined) ||
+    (/\bdana\b/i.test(combined) &&
+      !/(?:menerima|sumber|pengembalian|penarikan|transfer|pemindahan|alokasi|tarik)\s+dana/i.test(combined) &&
+      !/dana\s+sebesar/i.test(combined));
+
+  if (isDanaWallet) return "DANA";
+
+  // Fallback Shopee jika ada kata shopee
+  if (combined.includes("shopee")) return "ShopeePay";
+
   return "wondr by BNI"; // Default fallback
 }
 
-export function parseSmsBank(text: string): ParsedTransaction | null {
+export function parseSmsBank(text: string, appHint?: string): ParsedTransaction | null {
   if (!text || text.trim().length === 0) return null;
 
-  const bank = detectBank(text);
+  const bank = detectBank(text, appHint);
   const lower = text.toLowerCase();
 
   function parseAmount(str: string): number {
@@ -50,6 +82,7 @@ export function parseSmsBank(text: string): ParsedTransaction | null {
   const amountPatterns = [
     /(?:rp\.?|idr)\s*([\d.,]+)/i,
     /sebesar\s*(?:rp\.?)?\s*([\d.,]+)/i,
+    /senilai\s*(?:rp\.?)?\s*([\d.,]+)/i,
     /([\d]{1,3}(?:\.[\d]{3})+(?:,[\d]+)?)/, // Angka ribuan dengan titik (contoh: 62.000)
     /([\d]{4,})/, // Angka polos >= 1000
   ];
@@ -71,52 +104,34 @@ export function parseSmsBank(text: string): ParsedTransaction | null {
   }
 
   // 2. Tentukan apakah uang masuk (IN) atau uang keluar (OUT)
-  const isIncomeKeywords = [
-    "terima",
-    "diterima",
-    "masuk",
-    "top up",
-    "topup",
-    "kredit",
-    "cr",
-    "cashback",
-    "penerimaan",
-  ];
+  // Indikator pasti uang keluar:
+  const isDefiniteExpense =
+    /(?:melakukan\s+top\s*up|top\s*up.*ke\b|transfer.*ke\b|kirim.*ke\b|dikirim.*ke\b|berhasil\s+transfer|transfer\s+berhasil|bayar|pembayaran|qris|tarik|penarikan|pembelian|debit|debet|\bdb\b)/i.test(lower);
 
-  const isExpenseKeywords = [
-    "kirim",
-    "dikirim",
-    "keluar",
-    "debit",
-    "db",
-    "bayar",
-    "pembayaran",
-    "qris",
-    "transfer ke",
-    "berhasil transfer",
-    "tarik",
-  ];
+  // Indikator pasti uang masuk:
+  const isDefiniteIncome =
+    /(?:menerima\s+dana|kamu\s+menerima|diterima\s+dari|uang\s+masuk|dana\s+masuk|saldo\s+masuk|transfer\s+masuk|top\s*up\s+saldo.*dari|berhasil\s+top\s*up.*dari|top\s*up\s+berhasil|kredit|\bcr\b|cashback|pengembalian\s+dana|refund)/i.test(lower);
 
   let type: "IN" | "OUT" = "OUT";
 
-  const hasIncome = isIncomeKeywords.some((kw) => lower.includes(kw));
-  const hasExpense = isExpenseKeywords.some((kw) => lower.includes(kw));
-
-  if (hasIncome && !hasExpense) {
+  if (isDefiniteIncome && !isDefiniteExpense) {
     type = "IN";
-  } else if (hasExpense && !hasIncome) {
+  } else if (isDefiniteExpense && !isDefiniteIncome) {
     type = "OUT";
-  } else if (hasIncome && hasExpense) {
-    // Kalau ada dua-duanya (misal: "Top up saldo Rp... dari BNI" atau "Kamu menerima dana ... dari DANA"):
-    // Jika ada kata "menerima" atau "top up berhasil" -> IN
-    if (lower.includes("menerima") || lower.includes("top up") || lower.includes("masuk ke")) {
+  } else if (isDefiniteIncome && isDefiniteExpense) {
+    // Jika ada dua-duanya: periksa apakah teks berorientasi menerima
+    if (/menerima|diterima\s+dari|uang\s+masuk/i.test(lower)) {
       type = "IN";
     } else {
       type = "OUT";
     }
   } else {
-    // Fallback jika tidak ada kata kunci jelas
-    type = lower.includes("dari") ? "IN" : "OUT";
+    // Fallback kata kunci sederhana
+    const hasIncome = ["terima", "masuk", "kredit", "cr", "cashback"].some((k) => lower.includes(k));
+    const hasExpense = ["kirim", "keluar", "bayar", "debit", "db", "beli", "tarik"].some((k) => lower.includes(k));
+    if (hasIncome && !hasExpense) type = "IN";
+    else if (hasExpense && !hasIncome) type = "OUT";
+    else type = lower.includes("dari") ? "IN" : "OUT";
   }
 
   return {

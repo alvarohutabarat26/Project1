@@ -30,11 +30,14 @@ export async function POST(req: NextRequest) {
 
     rawText = (rawText || "").trim();
 
-    // Jika formatnya JSON, ekstrak field text
+    let appHint = req.nextUrl.searchParams.get("app") || req.nextUrl.searchParams.get("bank") || "";
+
+    // Jika formatnya JSON, ekstrak field text dan app/title
     if (rawText.startsWith("{") && rawText.endsWith("}")) {
       try {
         const body = JSON.parse(rawText);
         if (typeof body === "object" && body !== null) {
+          appHint = body.app || body.appName || body.bank || body.package || body.title || appHint;
           rawText = body.text || body.message || body.sms || body.notif || rawText;
         }
       } catch {
@@ -46,8 +49,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    // Parse teks notifikasi / SMS
-    const parsed = parseSmsBank(rawText);
+    // Parse teks notifikasi / SMS dengan appHint
+    const parsed = parseSmsBank(rawText, appHint);
     if (!parsed || parsed.amount <= 0) {
       try {
         await prisma.settings.create({
