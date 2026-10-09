@@ -23,9 +23,9 @@ export const BANK_CONFIGS: Record<string, { color: string; label: string; icon: 
 export function detectBank(text: string): string {
   const lower = text.toLowerCase();
   if (lower.includes("wondr") || lower.includes("bni")) return "wondr by BNI";
+  if (lower.includes("seabank") || lower.includes("sea bank") || lower.includes("shopee bank")) return "SeaBank";
   if (lower.includes("dana")) return "DANA";
   if (lower.includes("gopay") || lower.includes("gojek")) return "GoPay";
-  if (lower.includes("seabank") || lower.includes("sea bank")) return "SeaBank";
   if (lower.includes("jago") || lower.includes("bank jago")) return "Bank Jago";
   if (lower.includes("shopeepay") || lower.includes("shopee") || lower.includes("spay")) return "ShopeePay";
   if (lower.includes("bale") || lower.includes("btn")) return "bale by BTN";
@@ -37,52 +37,94 @@ export function detectBank(text: string): string {
 }
 
 export function parseSmsBank(text: string): ParsedTransaction | null {
+  if (!text || text.trim().length === 0) return null;
+
   const bank = detectBank(text);
+  const lower = text.toLowerCase();
 
   function parseAmount(str: string): number {
     return parseFloat(str.replace(/\./g, "").replace(",", ".")) || 0;
   }
 
-  // Regex deteksi tipe & amount
-  const inRegex = /(?:trfmasuk|transfer masuk|dana masuk|kredit|cr|top.?up|diterima|terima|masuk|uang masuk)[^\d]*rp\.?\s*([\d.,]+)/i;
-  const outRegex = /(?:trfkeluar|transfer keluar|debit|db|bayar|pembayaran|qris|kirim|keluar|uang keluar)[^\d]*rp\.?\s*([\d.,]+)/i;
-  const genericAmount = /rp\.?\s*([\d.,]+)/i;
+  // 1. Ekstrak nominal: cocokkan format Rp62.000, Rp. 62.000, IDR 62.000, ataupun 62.000
+  const amountPatterns = [
+    /(?:rp\.?|idr)\s*([\d.,]+)/i,
+    /sebesar\s*(?:rp\.?)?\s*([\d.,]+)/i,
+    /([\d]{1,3}(?:\.[\d]{3})+(?:,[\d]+)?)/, // Angka ribuan dengan titik (contoh: 62.000)
+    /([\d]{4,})/, // Angka polos >= 1000
+  ];
 
-  const inMatch = text.match(inRegex);
-  const outMatch = text.match(outRegex);
-  const amtMatch = text.match(genericAmount);
-
-  if (inMatch) {
-    return {
-      type: "IN",
-      amount: parseAmount(inMatch[1]),
-      description: text.slice(0, 120),
-      bank,
-    };
+  let detectedAmount = 0;
+  for (const pat of amountPatterns) {
+    const match = text.match(pat);
+    if (match) {
+      const val = parseAmount(match[1]);
+      if (val >= 100) {
+        detectedAmount = val;
+        break;
+      }
+    }
   }
 
-  if (outMatch) {
-    return {
-      type: "OUT",
-      amount: parseAmount(outMatch[1]),
-      description: text.slice(0, 120),
-      bank,
-    };
+  if (detectedAmount <= 0) {
+    return null;
   }
 
-  if (amtMatch) {
-    // Cek ada kata penerima / pengirim
-    const lower = text.toLowerCase();
-    const isIncome = lower.includes("dari") || lower.includes("diterima") || lower.includes("masuk");
-    return {
-      type: isIncome ? "IN" : "OUT",
-      amount: parseAmount(amtMatch[1]),
-      description: text.slice(0, 120),
-      bank,
-    };
+  // 2. Tentukan apakah uang masuk (IN) atau uang keluar (OUT)
+  const isIncomeKeywords = [
+    "terima",
+    "diterima",
+    "masuk",
+    "top up",
+    "topup",
+    "kredit",
+    "cr",
+    "cashback",
+    "penerimaan",
+  ];
+
+  const isExpenseKeywords = [
+    "kirim",
+    "dikirim",
+    "keluar",
+    "debit",
+    "db",
+    "bayar",
+    "pembayaran",
+    "qris",
+    "transfer ke",
+    "berhasil transfer",
+    "tarik",
+  ];
+
+  let type: "IN" | "OUT" = "OUT";
+
+  const hasIncome = isIncomeKeywords.some((kw) => lower.includes(kw));
+  const hasExpense = isExpenseKeywords.some((kw) => lower.includes(kw));
+
+  if (hasIncome && !hasExpense) {
+    type = "IN";
+  } else if (hasExpense && !hasIncome) {
+    type = "OUT";
+  } else if (hasIncome && hasExpense) {
+    // Kalau ada dua-duanya (misal: "Top up saldo Rp... dari BNI" atau "Kamu menerima dana ... dari DANA"):
+    // Jika ada kata "menerima" atau "top up berhasil" -> IN
+    if (lower.includes("menerima") || lower.includes("top up") || lower.includes("masuk ke")) {
+      type = "IN";
+    } else {
+      type = "OUT";
+    }
+  } else {
+    // Fallback jika tidak ada kata kunci jelas
+    type = lower.includes("dari") ? "IN" : "OUT";
   }
 
-  return null;
+  return {
+    type,
+    amount: detectedAmount,
+    description: text.slice(0, 150),
+    bank,
+  };
 }
 
 export function autoCategory(

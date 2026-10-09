@@ -54,6 +54,14 @@ export async function POST(req: NextRequest) {
     // Parse teks notifikasi / SMS
     const parsed = parseSmsBank(rawText);
     if (!parsed || parsed.amount <= 0) {
+      try {
+        await prisma.settings.create({
+          data: {
+            key: `webhook_debug_${Date.now()}`,
+            value: rawText.slice(0, 500),
+          },
+        });
+      } catch {}
       return NextResponse.json(
         { error: "Could not parse transaction from text", rawText },
         { status: 422 }
