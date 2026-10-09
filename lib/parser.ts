@@ -120,13 +120,13 @@ export function parseSmsBank(text: string, appHint?: string): ParsedTransaction 
   }
 
   // 2. Tentukan apakah uang masuk (IN) atau uang keluar (OUT)
-  // Indikator pasti uang keluar:
+  // Indikator pasti uang keluar (Indonesia & English):
   const isDefiniteExpense =
-    /(?:melakukan\s+top\s*up|top\s*up.*ke\b|transfer.*ke\b|transfer.*kepada\b|kirim.*ke\b|dikirim.*ke\b|berhasil\s+transfer|transfer\s+berhasil|bayar|pembayaran|qris|tarik|penarikan|pembelian|debit|debet|\bdb\b)/i.test(lower);
+    /(?:melakukan\s+top\s*up|top\s*up.*ke\b|transfer.*ke\b|transfer.*kepada\b|kirim.*ke\b|dikirim.*ke\b|berhasil\s+transfer|transfer\s+berhasil|bayar|pembayaran|qris|tarik|penarikan|pembelian|debit|debet|\bdb\b|you\s+sent|you\s+have\s+sent|transferred\s+to|payment\s+to|payment\s+of|debited|withdrawn)/i.test(lower);
 
-  // Indikator pasti uang masuk:
+  // Indikator pasti uang masuk (Indonesia & English):
   const isDefiniteIncome =
-    /(?:pengisian\s+saldo|isi\s+saldo|telah\s+ditambahkan|berhasil\s+ditambahkan|ditambahkan\s+ke|menerima\s+dana|kamu\s+menerima|menerima\s+transfer|diterima\s+dari|uang\s+masuk|dana\s+masuk|saldo\s+masuk|transfer\s+masuk|setor\s+tunai|setoran|top\s*up\s+saldo.*dari|berhasil\s+top\s*up|top\s*up\s+berhasil|kredit|\bcr\b|cashback|pengembalian\s+dana|refund)/i.test(lower);
+    /(?:has\s+sent.*to\s+you|sent.*to\s+you|you\s+received|received.*from|money\s+received|credited|to\s+your\s+account|pengisian\s+saldo|isi\s+saldo|telah\s+ditambahkan|berhasil\s+ditambahkan|ditambahkan\s+ke|menerima\s+dana|kamu\s+menerima|menerima\s+transfer|diterima\s+dari|uang\s+masuk|dana\s+masuk|saldo\s+masuk|transfer\s+masuk|setor\s+tunai|setoran|top\s*up\s+saldo.*dari|berhasil\s+top\s*up|top\s*up\s+berhasil|kredit|\bcr\b|cashback|pengembalian\s+dana|refund)/i.test(lower);
 
   let type: "IN" | "OUT" = "OUT";
 
@@ -136,25 +136,25 @@ export function parseSmsBank(text: string, appHint?: string): ParsedTransaction 
     type = "OUT";
   } else if (isDefiniteIncome && isDefiniteExpense) {
     // Jika ada dua-duanya: periksa apakah teks berorientasi menerima
-    if (/menerima|diterima|telah\s+ditambahkan|ditambahkan|pengisian|masuk/i.test(lower)) {
+    if (/has\s+sent.*to\s+you|to\s+you|menerima|diterima|telah\s+ditambahkan|ditambahkan|pengisian|masuk/i.test(lower)) {
       type = "IN";
     } else {
       type = "OUT";
     }
   } else {
     // Fallback kata kunci sederhana
-    const hasIncome = ["terima", "masuk", "kredit", "cr", "cashback"].some((k) => lower.includes(k));
-    const hasExpense = ["kirim", "keluar", "bayar", "debit", "db", "beli", "tarik"].some((k) => lower.includes(k));
+    const hasIncome = ["terima", "masuk", "kredit", "cr", "cashback", "received"].some((k) => lower.includes(k));
+    const hasExpense = ["kirim", "keluar", "bayar", "debit", "db", "beli", "tarik", "sent"].some((k) => lower.includes(k));
     if (hasIncome && !hasExpense) type = "IN";
     else if (hasExpense && !hasIncome) type = "OUT";
-    else type = lower.includes("dari") ? "IN" : "OUT";
+    else type = lower.includes("dari") || lower.includes("to you") ? "IN" : "OUT";
   }
 
   // Rapikan deskripsi jika ada nama bank/e-wallet menempel di awal
   let cleanDesc = text.trim();
-  const bankPrefixRegex = new RegExp(`^${bank}\\s*[:\\-–]?\\s*`, "i");
-  if (bankPrefixRegex.test(cleanDesc)) {
-    const rest = cleanDesc.replace(bankPrefixRegex, "").trim();
+  const knownPrefixRegex = /^(?:bank jago|jago|seabank|dana|gopay|gojek|shopeepay|shopee|spay|wondr by bni|wondr|bni|bale by btn|bale|btn|ovo|bca|mandiri|bri)\s*[:\-–]?\s*/i;
+  if (knownPrefixRegex.test(cleanDesc)) {
+    const rest = cleanDesc.replace(knownPrefixRegex, "").trim();
     cleanDesc = `${bank}: ${rest}`;
   }
 
