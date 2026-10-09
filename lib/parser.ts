@@ -179,3 +179,17 @@ export function autoCategory(
   }
   return null;
 }
+
+export function extractSourceBank(text: string): string | null {
+  const match = text.match(/(?:via|dari)\s+([a-zA-Z0-9]+(?:\s+[a-zA-Z0-9]+)?)/i);
+  if (!match) return null;
+  const sourceName = match[1].toLowerCase().trim();
+  if (sourceName.includes("bni") || sourceName.includes("wondr")) return "wondr by BNI";
+  if (sourceName.includes("bca")) return "BCA";
+  if (sourceName.includes("mandiri") || sourceName.includes("livin")) return "Mandiri";
+  if (sourceName.includes("bri") || sourceName.includes("brimo")) return "BRI";
+  if (sourceName.includes("seabank")) return "SeaBank";
+  if (sourceName.includes("jago")) return "Bank Jago";
+  if (sourceName.includes("btn") || sourceName.includes("bale")) return "bale by BTN";
+  return null;
+}

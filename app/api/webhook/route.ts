@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { parseSmsBank, autoCategory } from "@/lib/parser";
+import { parseSmsBank, autoCategory, extractSourceBank } from "@/lib/parser";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +91,33 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Jika transaksi adalah OUT dan sebelumnya sudah pernah dibuat secara auto-pair:
+    // cukup perbarui keterangannya agar tidak menduplikasi pemotongan saldo.
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (parsed.type === "OUT") {
+      const existingAutoOut = await prisma.transaction.findFirst({
+        where: {
+          accountId: targetAccount.id,
+          type: "OUT",
+          amount: parsed.amount,
+          createdAt: { gte: fiveMinutesAgo },
+          notes: { contains: "auto-pair" },
+        },
+      });
+
+      if (existingAutoOut) {
+        await prisma.transaction.update({
+          where: { id: existingAutoOut.id },
+          data: {
+            description: parsed.description,
+            rawText,
+            notes: "",
+          },
+        });
+        return NextResponse.json({ success: true, transaction: existingAutoOut, updatedAutoPair: true });
+      }
+    }
+
     // Buat transaksi
     const transaction = await prisma.transaction.create({
       data: {
@@ -109,6 +136,59 @@ export async function POST(req: NextRequest) {
       where: { id: targetAccount.id },
       data: { balance: { increment: delta } },
     });
+
+    // Auto-pair untuk top up via bank lain (misal: "Top up via BNI", "dari BNI")
+    if (parsed.type === "IN") {
+      const sourceBankName = extractSourceBank(rawText);
+      if (sourceBankName && sourceBankName !== targetAccount.bank) {
+        let sourceAccount = await prisma.account.findFirst({
+          where: {
+            OR: [
+              { bank: { equals: sourceBankName } },
+              { name: { equals: sourceBankName } },
+            ],
+          },
+        });
+
+        if (!sourceAccount) {
+          sourceAccount = await prisma.account.create({
+            data: {
+              name: sourceBankName,
+              bank: sourceBankName,
+              balance: 0,
+              color: "#f97316",
+            },
+          });
+        }
+
+        const existingOut = await prisma.transaction.findFirst({
+          where: {
+            accountId: sourceAccount.id,
+            type: "OUT",
+            amount: parsed.amount,
+            createdAt: { gte: fiveMinutesAgo },
+          },
+        });
+
+        if (!existingOut) {
+          await prisma.transaction.create({
+            data: {
+              amount: parsed.amount,
+              type: "OUT",
+              description: `${sourceBankName}: Transfer / Top up ke ${targetAccount.name}`,
+              rawText: `Auto-paired dari: ${rawText}`,
+              notes: "auto-pair",
+              accountId: sourceAccount.id,
+            },
+          });
+
+          await prisma.account.update({
+            where: { id: sourceAccount.id },
+            data: { balance: { decrement: parsed.amount } },
+          });
+        }
+      }
+    }
 
     // Update budget jika ada kategori & transaksi keluar
     if (categoryId && parsed.type === "OUT") {

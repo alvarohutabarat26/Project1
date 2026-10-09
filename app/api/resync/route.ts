@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { parseSmsBank } from "@/lib/parser";
+import { parseSmsBank, extractSourceBank } from "@/lib/parser";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,58 @@ export async function POST() {
           accountId: targetAccount.id,
         },
       });
+    }
+
+    // 1.5 Auto-pair transaksi masuk yang menyebutkan bank sumber (contoh: "via BNI") jika belum ada transaksi keluar
+    const currentTxs = await prisma.transaction.findMany({
+      include: { account: true },
+    });
+    for (const tx of currentTxs) {
+      if (tx.type !== "IN" || !tx.rawText) continue;
+      const sourceBankName = extractSourceBank(tx.rawText);
+      if (!sourceBankName || sourceBankName === tx.account?.bank) continue;
+
+      let sourceAccount = await prisma.account.findFirst({
+        where: {
+          OR: [
+            { bank: { equals: sourceBankName } },
+            { name: { equals: sourceBankName } },
+          ],
+        },
+      });
+
+      if (!sourceAccount) {
+        sourceAccount = await prisma.account.create({
+          data: {
+            name: sourceBankName,
+            bank: sourceBankName,
+            balance: 0,
+            color: "#f97316",
+          },
+        });
+      }
+
+      const hasOut = currentTxs.some(
+        (o) =>
+          o.type === "OUT" &&
+          o.accountId === sourceAccount!.id &&
+          o.amount === tx.amount &&
+          Math.abs(new Date(o.createdAt).getTime() - new Date(tx.createdAt).getTime()) < 10 * 60 * 1000
+      );
+
+      if (!hasOut) {
+        await prisma.transaction.create({
+          data: {
+            amount: tx.amount,
+            type: "OUT",
+            description: `${sourceBankName}: Transfer / Top up ke ${tx.account?.name || "e-Wallet"}`,
+            rawText: `Auto-paired dari: ${tx.rawText}`,
+            notes: "auto-pair",
+            accountId: sourceAccount.id,
+            createdAt: tx.createdAt,
+          },
+        });
+      }
     }
 
     // 2. Recalculate balance for all accounts from clean sum
