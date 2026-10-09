@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { formatRupiah } from "@/lib/utils";
-import { LogOut, Plus, X, Copy, Check } from "lucide-react";
+import { LogOut, Plus, X, Copy, Check, Trash2 } from "lucide-react";
 
 interface Account {
   id: string;
@@ -38,6 +38,26 @@ export default function SettingsPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [seedingCats, setSeedingCats] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetData = async () => {
+    if (!confirm("Yakin ingin menghapus semua data transaksi & mengosongkan saldo? Tindakan ini tidak dapat dibatalkan.")) return;
+    setResetting(true);
+    try {
+      const res = await fetch("/api/reset-data", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        alert(json.message || "Data berhasil dibersihkan!");
+        refreshData();
+      } else {
+        alert("Gagal membersihkan data");
+      }
+    } catch {
+      alert("Terjadi kesalahan koneksi");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -181,6 +201,24 @@ export default function SettingsPage() {
             <p className="text-slate-500 text-sm">Belum ada kategori. Klik "Isi default" untuk menambahkan kategori umum.</p>
           )}
         </div>
+      </div>
+
+      {/* Danger Zone: Reset Data */}
+      <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 sm:p-5">
+        <h2 className="font-semibold text-red-400 text-sm mb-1 flex items-center gap-2">
+          <Trash2 size={16} /> Zona Bahaya
+        </h2>
+        <p className="text-slate-400 text-xs mb-3">
+          Hapus seluruh riwayat transaksi, setoran, dan reset saldo semua akun ke Rp 0 untuk pengujian baru. PIN Anda tetap aman.
+        </p>
+        <button
+          onClick={handleResetData}
+          disabled={resetting}
+          className="bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors flex items-center gap-2"
+        >
+          <Trash2 size={14} />
+          {resetting ? "Membersihkan..." : "Bersihkan Semua Data Transaksi (Reset ke Rp 0)"}
+        </button>
       </div>
 
       {/* Logout */}
